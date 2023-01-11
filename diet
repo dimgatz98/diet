@@ -1,0 +1,746 @@
+#!/usr/bin/python3
+
+from itertools import combinations
+import random
+import os
+import json
+
+def random_combination(iterable, r):
+    pool = tuple(iterable)
+    n = len(pool)
+    indices = sorted(random.sample(range(n), r))
+    return tuple(pool[i] for i in indices)
+
+def stripped_input(msg):
+    x = input(msg)
+    x = x.strip()
+    return x
+
+def suggest_meals(meal_no, profile, desired_suggestions=1, weekly=False):
+    file = os.path.join(dir, f'{name}.json')
+    last_line = read_last_line(file)
+    if weekly or last_line == '':
+        calories = 0
+        protein = 0
+    else:
+        macros = json.loads(last_line)
+        calories = macros['calories']
+        protein = macros['protein']
+
+    calorie_goal = profile['calorie_goal']
+    protein_goal = profile['protein']
+
+    meals = []
+    meal_dict = {}
+    if not os.path.exists(meals_file) or os.path.isdir(meals_file):
+        print("Meals file doesn't exist")
+        return [], {}
+    with open(meals_file, 'r') as f:
+        lines = f.readlines()
+        for line in lines:
+            meal = json.loads(line)
+            meals.append((meal['calories'], meal['protein'], meal['name']))
+            meal_dict[meal['name']] = meal
+
+    if len(meals) < meal_no:
+        print("Not enough meals in meal file")
+        return [], {}
+
+    suggestions_count = 0
+    suggestions = []
+    random_suggestions_count = 0
+    random_suggestions = []
+    for combo in combinations(meals, meal_no):
+        sum1 = calorie_goal - calories
+        sum2 = protein_goal - protein
+        for i in range(meal_no):
+            sum1 -= combo[i][0]
+            sum2 -= combo[i][1]
+        sum = pow(pow(sum1, 2) + pow(sum2, 2), 1 / 2)
+
+        if suggestions_count < desired_suggestions or \
+            sum < suggestions[desired_suggestions - 1][1]:
+            suggestions_count += 1
+            suggestions.append(([x[2] for x in combo], sum))
+            suggestions.sort(key=lambda a: a[1])
+            if suggestions_count > desired_suggestions:
+                del suggestions[-1]
+
+        random_combo = random_combination(meals, meal_no)
+        sum1 = calorie_goal - calories
+        sum2 = protein_goal - protein
+        for i in range(meal_no):
+            sum1 -= random_combo[i][0]
+            sum2 -= random_combo[i][1]
+        sum1 = abs(sum1)
+        sum2 = abs(sum2)
+        
+        if sum1 < 5 / 100 * (calorie_goal - calories) and sum2 < 5 / 100 * (protein_goal - protein):
+            random_suggestions_count += 1
+            random_suggestions.append(([x[2] for x in random_combo],))
+            if random_suggestions_count == desired_suggestions:
+                return random_suggestions, meal_dict
+
+    return suggestions, meal_dict
+    
+
+def get_profile():
+    if not os.path.exists(profiles_file):
+        print('\nName not found. You may need to create a profile first')
+        return {}
+    name = stripped_input('Who are you?\n>>')
+    with open(profiles_file, 'r') as f:
+        for line in f.readlines():
+            profile = json.loads(line)
+            if name == profile['name']:
+                return profile
+    
+    print('\nName not found. You may need to create a profile first')
+    return {}
+
+def get_meal():
+    name = stripped_input('Enter the name of the meal\n>>')
+    with open(meals_file, 'r') as f:
+        for line in f.readlines():
+            meal = json.loads(line)
+            if name == meal['name']:
+                return meal
+    
+    print('\nMeal not found. You may need to create a meal first')
+    return {}
+    
+def read_profile_details(required=True):
+    if not required:
+        print('If you want a field to remain unchanged leave it blank')
+
+    weight = stripped_input("What is your weight(kg)?\n>>")
+    if not (not required and weight == ''):
+        while not isfloat(weight):
+            weight = stripped_input("Weight should be a float\n>>")
+        weight = float(weight)
+    
+    height = stripped_input("What is your height(cm)?\n>>")
+    if not (not required and height == ''):
+        while not isfloat(height):
+            height = stripped_input("Height should be a floa\n>>")
+        height = float(height)
+
+    age = stripped_input("What is your age(years)?\n>>")
+    if not (not required and age == ''):
+        while not age.isdigit():
+            age = stripped_input("Age should be an integer\n>>")
+        age = int(age)
+
+    gender = stripped_input("What is your gender?\n\
+        1) Male\n\
+        2) Female\n>>")
+    if not (not required and gender == ''):
+        while not gender in ['1', '2']:
+            gender = stripped_input("Invalid option, try again\n>>")
+        
+    workout_level = stripped_input("How much do you workout per week(out of ten)?\n>>")
+    if not (not required and workout_level == ''):
+        while not workout_level in [str(x) for x in range(11)]:
+            workout_level = stripped_input("Workout level should be an integer from 0 to 10\n>>")
+        workout_level = int(workout_level)
+
+    return {'weight': weight, 'height': height, 'age': age, 'gender': gender, 'workout_level': workout_level}
+
+def read_macros():
+    goal = stripped_input("What is your goal?\n\
+        1) Lose weight\n\
+        2) Maintain weight\n\
+        3) Gain weight(muscles)\n>>")
+    while goal not in ['1', '2', '3']:
+        goal = stripped_input('Invalid option, try again\n>>')
+
+    bmr = stripped_input("What is your BMR(kcal)?\n>>")
+    while not isfloat(bmr):
+        bmr = stripped_input('BMR must be a float\n>>')
+    bmr = float(bmr)
+
+    tdee = stripped_input("What is your TDEE(kcal)?\n>>")
+    while not isfloat(tdee):
+        tdee = stripped_input('TDEE must be a float\n>>')
+    tdee = float(tdee)
+
+    calorie_goal = stripped_input("What is your calorie goal(kcal)?\n>>")
+    while not isfloat(calorie_goal):
+        calorie_goal = stripped_input('Calorie goal must be a float\n>>')
+    calorie_goal = float(calorie_goal)
+
+    protein = stripped_input("What is your protein goal(gr)?\n>>")
+    while not protein.isdigit():
+        protein = stripped_input('Protein goal must be an integer\n>>')
+    protein = int(protein)
+
+    fat = stripped_input("What is your fat goal(gr)?\n>>")
+    while not isfloat(fat):
+        fat = stripped_input('Fat goal must be an integer\n>>')
+    fat = int(fat)
+
+    carbs = stripped_input("What is your carbs goal(gr)?\n>>")
+    while not isfloat(carbs):
+        carbs = stripped_input('Carbs goal must be an integer\n>>')
+
+    macros = {
+        "goal": goal, 
+        "bmr": bmr, 
+        'tdee': tdee, 
+        'calorie_goal': calorie_goal, 
+        'protein': protein, 
+        'fat': fat,
+        "carbs": carbs
+    }
+    return macros
+
+
+def calculate_macros(**profile_details):
+    desired_loss_per_day = profile_details['weight'] * 1000 / 700
+    
+    caloric_deficit = desired_loss_per_day * 7.7
+    
+    pal = 1.2 + profile_details['workout_level'] * 0.7 / 10
+    
+    if profile_details['gender'] == '1':
+        bmr = round(88.362 + (13.397 * profile_details['weight']) + (4.799 * profile_details['height']) - (5.677 * profile_details['age']), 3)
+    if profile_details['gender'] == '2':
+        bmr = round(447.593 + (9.247 * profile_details['weight']) + (3.098 * profile_details['height']) - (4.330 * profile_details['age']), 3)
+    tdee = round(bmr * pal, 3)
+    caloric_surplus = tdee * 15 / 100
+
+    goal = stripped_input("What is your goal?\n\
+        1) Lose weight\n\
+        2) Maintain weight\n\
+        3) Gain weight(muscles)\n>>")
+    while goal not in ['1', '2', '3']:
+        goal = stripped_input('Invalid option, try again\n>>')
+
+    if goal == '1':
+        calorie_goal = round(tdee - caloric_deficit, 3)
+    elif goal == '2':
+        calorie_goal = round(tdee, 3)
+    elif goal == '3':
+        calorie_goal = round(tdee + caloric_surplus, 3)
+
+    if goal == '1':
+        protein = round(calorie_goal * 40 / 400, 3)
+        fat = round(calorie_goal * 35 / 900, 3)
+        carbs = round(calorie_goal * 25 / 400, 3)
+    elif goal == '2':
+        protein = round(calorie_goal * 30 / 400, 3)
+        fat = round(calorie_goal * 30 / 900, 3)
+        carbs = round(calorie_goal * 40 / 400, 3)
+    elif goal == '3':
+        protein = round(calorie_goal * 30 / 400, 3)
+        fat = round(calorie_goal * 20 / 900, 3)
+        carbs = round(calorie_goal * 50 / 400, 3)
+
+    print(f'\nBMR(kcal): {bmr}\nTDEE(kcal): {tdee}\n\
+Calorie goal(kcal): {calorie_goal}\nProtein goal(gr): {protein}\n\
+Fat goal(gr): {fat}\nCarbs goal(gr): {carbs}')
+
+    macros = {
+        "goal": goal, 
+        "bmr": bmr, 
+        'tdee': tdee, 
+        'calorie_goal': calorie_goal, 
+        'protein': protein, 
+        'fat': fat,
+        "carbs": carbs
+    }
+    return macros
+
+
+def delete_line_from_file(file):
+    option = stripped_input('1) Choose by name\n\
+2) Delete all records\n>>')
+    while option not in ['1', '2']:
+        stripped_input('Invalid option, try again\n>>')
+    
+    if option == '1':
+        name = stripped_input("\nEnter name\n>>")
+    
+        s = create_set_from_json_field(file, 'name')
+        if name not in s:
+            print("\nName not found")
+        else:
+            new_lines = []
+            with open(file, 'r') as f:
+                lines = f.readlines()
+                for line in lines:
+                    if json.loads(line)['name'] != name:
+                        new_lines.append(line)
+            
+            with open(file, 'w') as f:
+                f.write(''.join(new_lines))
+    else:
+        with open(file, 'w') as f:
+            f.write("")
+
+
+def add_line_to_file(file, **data):
+    s = create_set_from_json_field(file, 'name')
+    
+    name = stripped_input("Enter a name\n>>")
+    while name == "" or name in s:
+        if name == "":
+            print("Name cannot be empty\n>>")
+        else:
+            option = stripped_input("Name already exists\n\
+    1) return to main menu\n\
+    2) pick a new name\n>>")
+            while option not in ['1','2']:
+                option = stripped_input("Invalid option, try again\n>>")
+            if option == '1':
+                return -1
+        name = stripped_input()
+    data['name'] = name.strip()
+    with open(file, 'a') as f:
+        f.write(json.dumps(data) + '\n') 
+    return 1
+
+def create_set_from_json_field(file, field):
+    s = set()
+    if not os.path.exists(file):
+        return s
+    with open(file, 'r') as f:
+        lines = f.readlines()
+        for line in lines:
+            d = json.loads(line)
+            if d[field] not in s:
+                s.add(d[field])
+    return s
+
+def read_last_line(file):
+    if not os.path.exists(file):
+        return "" 
+
+    with open(file, 'rb') as f:
+        try:
+            f.seek(-2, os.SEEK_END)
+            while f.read(1) != b'\n':
+                f.seek(-2, os.SEEK_CUR)
+        except OSError:
+            f.seek(0)
+        last_line = f.readline().decode()
+    return last_line
+
+def print_json_file(file, name):
+    try:
+        with open(file, 'r') as f:
+            lines = f.readlines()
+            if len(lines) == 0:
+                print(f'{name} file is empty')
+            else:
+                print(f'{name}:')
+                for line in lines:
+                    data = json.loads(line)
+                    for k, v in data.items():
+                        print(f'    {k}: {v}')
+                    print()
+    except:
+        print(f'{name} file is empty')
+
+def read_meal():
+    answer = 'y'
+    calories, protein, carbs, fat, meal_weight = [0] * 5
+    while answer.lower() == 'y':
+        answer = stripped_input("Ingredient calories(per 100g)\n>>")
+        while not isfloat(answer):
+            answer = stripped_input("Ingredient calories should be a float\n>>")
+        calories += float(answer)
+        
+        answer = stripped_input("Ingredient protein(per 100g)\n>>")
+        while not isfloat(answer):
+            answer = stripped_input("Ingredient protein should be a float\n>>")
+        protein += float(answer)
+
+        answer = stripped_input("Ingredient carbs(per 100g)\n>>")
+        while not isfloat(answer):
+            answer = stripped_input("Ingredient carbs should be a float\n>>")
+        carbs += float(answer)
+
+        answer = stripped_input("Ingredient fat(per 100g)\n>>")
+        while not isfloat(answer):
+            answer = stripped_input("Ingredient fat should be a float\n>>")
+        fat += float(answer)
+
+        answer = stripped_input("Ingredient weight(gr)\n>>")
+        while not isfloat(answer):
+            answer = stripped_input("Ingredient weight should be a float\n>>")
+        meal_weight += float(answer)
+
+        answer = input('Add more ingredients?(y/n)')
+        while answer.lower() not in ['y', 'n']:
+            answer = input('Invalid answer, try again\n>>')
+
+    meal_type = stripped_input("Meal type\n\
+        1) Breakfast\n\
+        2) Lunch\n\
+        3) Supper\n\
+        4) Snack\n>>")
+    while meal_type not in ['1','2','3','4']:
+        meal_type = stripped_input('Invalid answer, try again\n>>')
+    if meal_type == '1':
+        meal_type = 'Breakfast'
+    elif meal_type == '2':
+        meal_type = 'Lunch'
+    elif meal_type == '3':
+        meal_type = 'Supper'
+    elif meal_type == '4':
+        meal_type = 'Snack'
+
+    meal = {
+        'calories': calories, 
+        'protein': protein, 
+        'carbs': carbs, 
+        'fat': fat, 
+        'meal_weight': meal_weight,
+        'meal_type': meal_type
+    }
+
+    print('Meal:')
+    for k in meal.keys():
+        if k == 'meal_weight' or k == 'meal_type':
+            print(f'    {k}: {meal[k]}')
+            continue
+        meal[k] = meal[k] * meal['meal_weight'] / 100
+        print(f'    {k}: {meal[k]}')
+
+    print()
+
+    return meal 
+
+def isfloat(num):
+    try:
+        float(num)
+        return True
+    except:
+        return False
+
+home = os.getenv("HOME")
+dir = os.path.join(home, '.diet')
+if not os.path.exists(dir):
+    os.makedirs(dir)
+meals_file = os.path.join(dir, 'meals.json')
+profiles_file = os.path.join(dir, 'profiles.json')
+
+while 1:
+    print("\nWhat do you want to do?\n\
+        1) Calculate macros\n\
+        2) Show today's macros\n\
+        3) Sum total macros and calories for today\n\
+        4) Show meals\n\
+        5) Add new meal\n\
+        6) Delete meal(s)\n\
+        7) Show profiles\n\
+        8) Create profile\n\
+        9) Delete profile(s)\n\
+        10) Set profile details\n\
+        11) Suggest meals\n\
+        12) Create weekly diet\n\
+        13) Exit")
+
+    option = stripped_input("Choose one option from above: ")
+
+    while option not in ['1','2','3','4','5','6','7','8','9','10','11','12','13']:
+        option = stripped_input("Invalid option, try again\n>>")
+
+    print()
+    if option == '1':
+        profile_details = read_profile_details()
+        
+        calculate_macros(**profile_details)
+        
+    elif option == '2':
+        profile = get_profile()
+        if len(profile.items()) == 0:
+            continue
+        name = profile['name']
+        file = os.path.join(dir, f'{name}.json')
+
+        try:
+            last_line = read_last_line(file)
+            if last_line == "":
+                print("No macros available")
+            else:
+                total = json.loads(last_line)
+                print('Total macros for today:')
+                for k,v in total.items():
+                    print(f'    {k}: {v}')
+        except Exception as e:
+            print("No macros available")
+
+    elif option == '3':
+        profile = get_profile()
+        if len(profile.items()) == 0:
+            continue
+        name = profile['name']
+        file = os.path.join(dir, f'{name}.json')
+
+        reset = stripped_input("Are you starting a new day?(y/n)")
+        while reset.lower() not in ['y', 'n']:
+            reset = stripped_input()
+        if reset == 'y':
+            with open(file, 'w') as f:
+                d = {'protein': 0, 'carbs': 0, 'fat': 0, 'calories': 0, 'meals': 0}
+                f.write(json.dumps(d) + '\n')
+
+        try:
+            last_line = read_last_line(file)
+            total = json.loads(last_line) if last_line != "" else {'protein': 0, 'carbs': 0, 'fat': 0, 'calories': 0, 'meals': 0}
+        except Exception as e:
+            print(e)
+            total = {'protein': 0, 'carbs': 0, 'fat': 0, 'calories': 0, 'meals': 0}
+        
+        print('\nTotal macros for today:')
+        for k, v in total.items():
+            print(f'    {k}: {v}')
+
+        s = create_set_from_json_field(meals_file, 'name')
+        option = stripped_input('\nWhat do you want to do?\n\
+            1) Add new meal\n\
+            2) Choose an existing meal by name\n>>')
+        while option not in ['1', '2']:
+            option = stripped_input('Invalid option, try again\n>>')
+        if option == '1':
+            meal = read_meal()
+            name = stripped_input("Give a name for this meal(leave it blank if you dont want the meal to be saved)\n>>")
+            if name != '':    
+                while name in s:
+                    option = stripped_input("Name already exists\n\
+            1) don't save meal\n\
+            2) pick a new name\n>>")
+                    while option not in ['1','2']:
+                        option = stripped_input("Invalid option, try again\n>>")
+                    if option == '1':
+                        name = ''
+                        break
+                    else:
+                        name = stripped_input()
+                if name != '':
+                    meal['name'] = name
+                    with open(meals_file, 'a') as f:
+                        f.write(json.dumps(meal) + '\n')    
+
+        else:
+            meal = get_meal()
+            if len(meal.items()) == 0:
+                continue
+        meal['name'] = name
+        
+        print()
+        for key in total.keys():
+            if key == 'meals':
+                total[key] += 1
+                continue
+            meal[key] = round(meal[key], 3)
+            total[key] += meal[key]
+            total[key] = round(total[key], 3)
+            print(f'Meal {key}: {meal[key]}')
+            
+        print('\nNew macros:')
+        for k,v in total.items():
+            print(f'    {k}: {v}')
+        
+        save = stripped_input("\nWould you like to save new total macros for the day?(y/n)")
+        while save.lower() not in ['y', 'n']:
+            save = stripped_input('Invalid answer, try again')
+        if save == 'y':
+            with open(file, 'a') as f:
+                f.write(json.dumps(total) + '\n')
+
+    elif option == '4':
+        print_json_file(meals_file, 'Meals')
+
+    elif option == '5':
+        meal = read_meal()
+
+        name = input('Enter a name for this meal\n>>')
+        meal['name'] = name
+        
+        code = add_line_to_file(meals_file, **meal)
+        if code == 1:
+            print('Meal added')
+
+    elif option == '6':
+        delete_line_from_file(meals_file)
+        print('Meal(s) deleted')
+
+    elif option == '7':
+        print_json_file(profiles_file, 'Profiles')
+
+    elif option == '8':
+        profile_details = read_profile_details()
+        
+        option = stripped_input("What do you want to do?\n\
+        1) Set macros manually\n\
+        2) Calculate macros automatically\n>>")
+        while option not in ['1', '2']:
+            stripped_input('Invalid option, try again\n>>')
+        if option == '1':
+            profile_details.update(read_macros())
+        else:
+            profile_details.update(calculate_macros(**profile_details))
+        print()
+        
+        code = add_line_to_file(profiles_file, **profile_details)
+        if code == 1:
+            print('Profile created')
+
+    elif option == '9':
+        delete_line_from_file(profiles_file)
+        print('Profile(s) deleted')
+
+    elif option == '10':
+        name = stripped_input('Enter the name of the profile you would like to modify\n>>')
+        s = create_set_from_json_field(profiles_file, 'name')
+        if name not in s:
+            print("\nName not found")
+        else:
+            with open(profiles_file, 'r') as f:
+                lines = f.readlines()
+                for line in lines:
+                    profile = json.loads(line)
+                    if profile['name'] == name:
+                        break
+            print('\nProfile data:')
+            for k, v in profile.items():
+                print(f'    {k}: {v}')
+            print()
+
+        new_profile = read_profile_details(required=False)
+        new_profile['name'] = name
+        for k, v in new_profile.items():
+            if v == '':
+                new_profile[k] = profile[k]
+
+        option = stripped_input("What do you want to do?\n\
+        1) Set macros manually\n\
+        2) Calculate macros automatically\n>>")
+        while option not in ['1', '2']:
+            stripped_input('Invalid option, try again\n>>')
+        if option == '1':
+            new_profile.update(read_macros())
+        else:
+            new_profile.update(calculate_macros(**profile))
+        
+        new_lines = []
+        for line in lines:
+            if json.loads(line)['name'] == name:
+                new_lines.append(json.dumps(new_profile) + '\n')
+            else:
+                new_lines.append(line)
+
+        with open(profiles_file, 'w') as f:
+            f.write(''.join(new_lines))
+
+        print('Profile changed')
+
+    elif option == '11':
+        profile = get_profile()
+        if len(profile.items()) == 0:
+            continue
+        name = profile['name']
+        meal_no = stripped_input("Enter the number of remaining meals\n>>")
+        while not meal_no.isdigit():
+            meal_no = stripped_input("Meal number must be an integer\n>>")
+        meal_no = int(meal_no)
+        suggestions, meal_dict = suggest_meals(meal_no, profile, desired_suggestions=100)
+
+        suggested = set()
+        print('Suggestions:')
+        for suggestion in suggestions:
+            if len(suggestion[0]) < meal_no:
+                x = 'y'
+                break
+            random_number = random.randint(0, len(suggestions) - 1)
+            while random_number in suggested:
+                random_number = random.randint(0, len(suggestions) - 1)
+            suggested.add(random_number)
+            for s in suggestions[random_number][0]:
+                meal = meal_dict[s]
+                for k, v in meal.items():
+                    print(f'  {k}: {v}')
+                print()
+            x = stripped_input('Would you like another suggestion?(y/n)')
+            while x.lower() not in ['y', 'n']:
+                x = stripped_input('Invalid answer, try again\n>>')
+            if x == 'n':
+                break
+        if x.lower() == 'y':
+            print("Not enough meals")
+
+    elif option == '12':
+        profile = get_profile()
+        if len(profile.items()) == 0:
+            continue
+        name = profile['name']
+        meal_no = stripped_input("Enter your daily number of meals(preferred 5)\n>>")
+        while not meal_no.isdigit():
+            meal_no = stripped_input("Meal number must be an integer\n>>")
+        meal_no = int(meal_no)
+        suggestions, meal_dict = suggest_meals(meal_no, profile, 7 * 10, weekly=True)
+        
+        if len(suggestions) == 0:
+                x = 'y'
+
+        suggested = set()
+        for i, suggestion in enumerate(suggestions):
+            if len(suggestions) - i < 7:
+                x = 'y'
+                break
+            
+            random_number = random.randint(0, len(suggestions) - 1)
+            while random_number in suggested:
+                random_number = random.randint(0, len(suggestions) - 1)
+            suggested.add(random_number)
+            print(f"Day {i % 7 + 1}")
+            print(' Meals:')
+            for s in suggestions[random_number][0]:
+                meal = meal_dict[s]
+                for k, v in meal.items():
+                    print(f'     {k}: {v}')
+                print()
+
+            if (i + 1) % 7 == 0:
+                x = stripped_input('Would you like another diet?(y/n)')
+                while x.lower() not in ['y', 'n']:
+                    x = stripped_input('Invalid answer, try again\n>>')
+                if x.lower() == 'n':
+                    out_dir = input(
+                        f'Where do you want to save your diet?(Blank for default: {home}/diet.txt)\n>>'
+                    )
+                    overwrite = False
+                    while os.path.exists(out_dir) and not overwrite:
+                        if os.path.isfile(out_dir):
+                            option = input(f'{out_dir} exists and is about to be overwriten, continue?(y/n)')
+                            while option.lower() not in ['y', 'n']:
+                                option = input('Invalid option, try again\n>>') 
+                            if option == 'y':
+                                overwrite = True
+                                continue
+                        else:
+                            print(f'{out_dir} is a directory')
+                        out_dir = input('Enter new directory(blank for default)\n>>')
+
+                    if out_dir == '':
+                        out_dir = os.path.join(home, 'diet.txt')
+                    with open(out_dir, 'w') as f:
+                        for j in range(i - 6, i + 1):
+                            f.write(f"Day {j % 7 + 1}\n")
+                            f.write(' Meals:\n')
+                            for s in suggestions[j][0]:
+                                meal = meal_dict[s]
+                                for k, v in meal.items():
+                                    f.write(f'     {k}: {v}\n')
+                                f.write('\n')
+                    print(f'Diet saved at {out_dir}')
+                    break
+        
+        if x.lower() == 'y':
+            print('Not enough meals')
+
+    elif option == '13':
+        break
